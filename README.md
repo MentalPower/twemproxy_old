@@ -4,26 +4,26 @@
 
 ## Build
 
-To build nutcracker from distribution tarball:
+To build twemproxy from distribution tarball:
 
     $ ./configure
     $ make
     $ sudo make install
 
-To build nutcracker from distribution tarball in _debug mode_:
+To build twemproxy from distribution tarball in _debug mode_:
 
     $ CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full
     $ make
     $ sudo make install
 
-To build nutcracker from source with _debug logs enabled_ and _assertions disabled_:
+To build twemproxy from source with _debug logs enabled_ and _assertions disabled_:
 
     $ git clone git@github.com:twitter/twemproxy.git
     $ cd twemproxy
     $ autoreconf -fvi
     $ ./configure --enable-debug=log
     $ make
-    $ src/nutcracker -h
+    $ src/twemproxy -h
 
 ## Features
 
@@ -41,7 +41,7 @@ To build nutcracker from source with _debug logs enabled_ and _assertions disabl
 
 ## Help
 
-    Usage: nutcracker [-?hVdt] [-v verbosity level] [-o output file]
+    Usage: twemproxy [-?hVdt] [-v verbosity level] [-o output file]
                       [-c conf file] [-s stats port] [-i stats interval]
                       [-p pid file] [-m mbuf size]
 
@@ -52,7 +52,7 @@ To build nutcracker from source with _debug logs enabled_ and _assertions disabl
       -d, --daemonize        : run as a daemon
       -v, --verbosity=N      : set logging level (default: 5, min: 0, max: 11)
       -o, --output=S         : set logging file (default: stderr)
-      -c, --conf-file=S      : set configuration file (default: conf/nutcracker.yml)
+      -c, --conf-file=S      : set configuration file (default: conf/twemproxy.yml)
       -s, --stats-port=N     : set stats monitoring port (default: 22222)
       -i, --stats-interval=N : set stats aggregation interval in msec (default: 30000 msec)
       -p, --pid-file=S       : set pid file (default: off)
@@ -60,27 +60,27 @@ To build nutcracker from source with _debug logs enabled_ and _assertions disabl
 
 ## Zero Copy
 
-In nutcracker, all the memory for incoming requests and outgoing responses is allocated in mbuf. Mbuf enables zero-copy because the same buffer on which a request was received from the client is used for forwarding it to the server. Similarly the same mbuf on which a response was received from the server is used for forwarding it to the client.
+In twemproxy, all the memory for incoming requests and outgoing responses is allocated in mbuf. Mbuf enables zero-copy because the same buffer on which a request was received from the client is used for forwarding it to the server. Similarly the same mbuf on which a response was received from the server is used for forwarding it to the client.
 
-Furthermore, memory for mbufs is managed using a reuse pool. This means that once mbuf is allocated, it is not deallocated, but just put back into the reuse pool. By default each mbuf chunk is set to 16K bytes in size. There is a trade-off between the mbuf size and number of concurrent connections nutcracker can support. A large mbuf size reduces the number of read syscalls made by nutcracker when reading requests or responses. However, with large mbuf size, every active connection would use up 16K bytes of buffer which might be an issue when nutcracker is handling large number of concurrent connections from clients. When nutcracker is meant to handle a large number of concurrent client connections, you should set chunk size to a small value like 512 bytes using the -m or --mbuf-size=N argument.
+Furthermore, memory for mbufs is managed using a reuse pool. This means that once mbuf is allocated, it is not deallocated, but just put back into the reuse pool. By default each mbuf chunk is set to 16K bytes in size. There is a trade-off between the mbuf size and number of concurrent connections twemproxy can support. A large mbuf size reduces the number of read syscalls made by twemproxy when reading requests or responses. However, with large mbuf size, every active connection would use up 16K bytes of buffer which might be an issue when twemproxy is handling large number of concurrent connections from clients. When twemproxy is meant to handle a large number of concurrent client connections, you should set chunk size to a small value like 512 bytes using the -m or --mbuf-size=N argument.
 
 ## Configuration
 
-nutcracker can be configured through a YAML file specified by the -c or --conf-file command-line argument on process start. The configuration file is used to specify the server pools and the servers within each pool that nutcracker manages. The configuration files parses and understands the following keys:
+twemproxy can be configured through a YAML file specified by the -c or --conf-file command-line argument on process start. The configuration file is used to specify the server pools and the servers within each pool that twemproxy manages. The configuration files parses and understands the following keys:
 
 + **listen**: The listening address and port (name:port or ip:port) for this server pool.
 + **hash**: The name of the hash function. Possible values are: one_at_a_time, md5, crc32, fnv1_64, fnv1a_64, fnv1_32, fnv1a_32, hsieh, murmur, and jenkins.
 + **distribution**: The key distribution mode. Possible values are: ketama, modula and random.
 + **timeout**: The timeout value in msec that we wait for to establish a connection to the server or receive a response from a server. By default, we wait indefinitely.
 + **backlog**: The TCP backlog argument. Defaults to 512.
-+ **preconnect**: A boolean value that controls if nutcracker should preconnect to all the servers in this pool on process start. Defaults to false.
++ **preconnect**: A boolean value that controls if twemproxy should preconnect to all the servers in this pool on process start. Defaults to false.
 + **server_connections**: The maximum number of connections that can be opened to each server. By default, we open at most 1 server connection.
 + **auto_eject_hosts**: A boolean value that controls if server should be ejected temporarily when it fails consecutively server_failure_limit times. Defaults to false.
 + **server_retry_timeout**: The timeout value in msec to wait for before retrying on a temporarily ejected server, when auto_eject_host is set to true. Defaults to 30000 msec.
 + **server_failure_limit**: The number of conseutive failures on a server that would leads to it being temporarily ejected when auto_eject_host is set to true. Defaults to 2.
 + **servers**: A list of server address, port and weight (name:port:weight or ip:port:weight) for this server pool.
 
-For example, the configuration file in conf/nutcracker.yml, also shown below, configures 4 server pools with names -  _alpha_, _beta_, _gamma_ and _delta_. Clients that intend to send requests to one of the 10 servers in pool gamma connect to port 22123 on 127.0.0.1. Clients that intend to send request to one of 2 servers in pool delta connect to unix path /tmp/gamma. Requests sent to pool alpha and delta have no timeout and might require timeout functionality to be implemented on the client side. On the other hand, requests sent to pool beta and gamma timeout after 400 msec and 100 msec respectively when no response is received from the server. Of the 4 server pools, only pools alpha, beta and gamma are configured to use server ejection and hence are resilient to server failures. All the 4 server pools use ketama consistent hashing for key distribution with the key hasher for pools alpha, beta and gamma set to fnv1a_64 while that for pool delta set to hsieh.
+For example, the configuration file in conf/twemproxy.yml, also shown below, configures 4 server pools with names -  _alpha_, _beta_, _gamma_ and _delta_. Clients that intend to send requests to one of the 10 servers in pool gamma connect to port 22123 on 127.0.0.1. Clients that intend to send request to one of 2 servers in pool delta connect to unix path /tmp/gamma. Requests sent to pool alpha and delta have no timeout and might require timeout functionality to be implemented on the client side. On the other hand, requests sent to pool beta and gamma timeout after 400 msec and 100 msec respectively when no response is received from the server. Of the 4 server pools, only pools alpha, beta and gamma are configured to use server ejection and hence are resilient to server failures. All the 4 server pools use ketama consistent hashing for key distribution with the key hasher for pools alpha, beta and gamma set to fnv1a_64 while that for pool delta set to hsieh.
 
     alpha:
       listen: 127.0.0.1:22121
@@ -135,19 +135,19 @@ For example, the configuration file in conf/nutcracker.yml, also shown below, co
        - 127.0.0.1:11214:100000
        - 127.0.0.1:11215:1
 
-Finally, to make writing syntactically correct configuration file easier, nutcracker provides a command-line argument -t or --test-conf that can be used to test the YAML configuration file for any syntax error.
+Finally, to make writing syntactically correct configuration file easier, twemproxy provides a command-line argument -t or --test-conf that can be used to test the YAML configuration file for any syntax error.
 
 ## Observability
 
-Observability in nutcracker is through logs and stats.
+Observability in twemproxy is through logs and stats.
 
-Nutcracker exposes stats at the granularity of server pool and servers per pool through the stats monitoring port. The stats are essentially JSON formatted key-value pairs, with the keys corresponding to counter names. By default stats are exposed on port 22222 and aggregated every 30 seconds. Both these values can be configured on program start using the -c or --conf-file and -i or --stats-interval command-line arguments respectively.
+twemproxy exposes stats at the granularity of server pool and servers per pool through the stats monitoring port. The stats are essentially JSON formatted key-value pairs, with the keys corresponding to counter names. By default stats are exposed on port 22222 and aggregated every 30 seconds. Both these values can be configured on program start using the -c or --conf-file and -i or --stats-interval command-line arguments respectively.
 
-Logging in nutcracker is only available when nutcracker is built with logging enabled. By default logs are written to stderr. Nutcracker can also be configured to write logs to a specific file through the -o or --output command-line argument. On a running nutcracker, we can turn log levels up and down by sending it SIGTTIN and SIGTTOU signals respectively and reopen log files by sending it SIGHUP signal.
+Logging in twemproxy is only available when twemproxy is built with logging enabled. By default logs are written to stderr. twemproxy can also be configured to write logs to a specific file through the -o or --output command-line argument. On a running twemproxy, we can turn log levels up and down by sending it SIGTTIN and SIGTTOU signals respectively and reopen log files by sending it SIGHUP signal.
 
 ## Deployment
 
-If you are deploying nutcracker in production, you might consider reading through the [recommendation document](https://github.com/twitter/twemproxy/blob/master/notes/recommendation.md) to understand the parameters you could tune in nutcracker to run it efficiently in the production environment.
+If you are deploying twemproxy in production, you might consider reading through the [recommendation document](https://github.com/twitter/twemproxy/blob/master/notes/recommendation.md) to understand the parameters you could tune in twemproxy to run it efficiently in the production environment.
 
 ## Users
 + [Pinterest](http://pinterest.com/)

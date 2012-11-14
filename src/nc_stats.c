@@ -892,7 +892,7 @@ stats_create(uint16_t stats_port, int stats_interval, char *source,
     st->sd = -1;
 
     string_set_text(&st->service_str, "service");
-    string_set_text(&st->service, "nutcracker");
+    string_set_text(&st->service, "twemproxy");
 
     string_set_text(&st->source_str, "source");
     string_set_raw(&st->source, source);

@@ -31,6 +31,7 @@
 # Core and executable
 core*
 nutcracker
+twemproxy
 
 # extracted yaml
 !/contrib/yaml-0.1.4.tar.gz

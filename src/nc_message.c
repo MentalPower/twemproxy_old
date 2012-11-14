@@ -38,7 +38,7 @@
  *         Request    Response      ...../ nc_mbuf.[ch]  (mesage buffers)
  *      nc_request.c  nc_response.c ...../ nc_parse.[ch] (message parser)
  *
- * Messages in nutcracker are manipulated by a chain of processing handlers,
+ * Messages in twemproxy are manipulated by a chain of processing handlers,
  * where each handler is responsible for taking the input and producing an
  * output for the next handler in the chain. This mechanism of processing
  * loosely conforms to the standard chain-of-responsibility design pattern
@@ -71,7 +71,7 @@
  * with read or IN event
  *
  *             Client+             Proxy           Server+
- *                              (nutcracker)
+ *                              (twemproxy)
  *                                   .
  *       msg_recv {read event}       .       msg_recv {read event}
  *         +                         .                         +
