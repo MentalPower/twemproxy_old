@@ -1,3 +1,10 @@
+twemproxy (0.1.20-2ubuntu2) lucid; urgency=low
+
+  [ Esteban Santana Santana ]
+  * Removed extraneous build dependencies
+
+ -- Esteban Santana Santana <ESantana@Curse.com>  Wed, 14 Nov 2012 16:35:03 +0000
+
 twemproxy (0.1.20-2ubuntu1) lucid; urgency=low
 
   [ Esteban Santana Santana ]

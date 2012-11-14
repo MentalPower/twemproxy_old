@@ -3,8 +3,7 @@ Maintainer: Esteban Santana Santana <ESantana@Curse.com>
 Section: net
 Priority: optional
 Standards-Version: 3.9.3
-Build-Depends: debhelper (>= 7), build-essential, dh-autoreconf, hardening-wrapper,
- autotools-dev, libgl1-mesa-glx, mime-support, libmagic1, locales, file, gawk
+Build-Depends: debhelper (>= 7), build-essential, dh-autoreconf, hardening-wrapper
 Homepage: https://github.com/twitter/twemproxy
 
 Package: twemproxy
