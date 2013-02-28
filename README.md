@@ -41,7 +41,7 @@ To build twemproxy from source with _debug logs enabled_ and _assertions disable
 
 ## Help
 
-    Usage: twemproxy [-?hVdt] [-v verbosity level] [-o output file]
+    Usage: twemproxy [-?hVdDt] [-v verbosity level] [-o output file]
                       [-c conf file] [-s stats port] [-i stats interval]
                       [-p pid file] [-m mbuf size]
 
@@ -50,6 +50,7 @@ To build twemproxy from source with _debug logs enabled_ and _assertions disable
       -V, --version          : show version and exit
       -t, --test-conf        : test configuration for syntax errors and exit
       -d, --daemonize        : run as a daemon
+      -D, --describe-stats   : print stats description and exit
       -v, --verbosity=N      : set logging level (default: 5, min: 0, max: 11)
       -o, --output=S         : set logging file (default: stderr)
       -c, --conf-file=S      : set configuration file (default: conf/twemproxy.yml)
@@ -69,8 +70,21 @@ Furthermore, memory for mbufs is managed using a reuse pool. This means that onc
 twemproxy can be configured through a YAML file specified by the -c or --conf-file command-line argument on process start. The configuration file is used to specify the server pools and the servers within each pool that twemproxy manages. The configuration files parses and understands the following keys:
 
 + **listen**: The listening address and port (name:port or ip:port) for this server pool.
-+ **hash**: The name of the hash function. Possible values are: one_at_a_time, md5, crc32, fnv1_64, fnv1a_64, fnv1_32, fnv1a_32, hsieh, murmur, and jenkins.
-+ **distribution**: The key distribution mode. Possible values are: ketama, modula and random.
++ **hash**: The name of the hash function. Possible values are:
+ + one_at_a_time
+ + md5
+ + crc32
+ + fnv1_64
+ + fnv1a_64
+ + fnv1_32
+ + fnv1a_32
+ + hsieh
+ + murmur
+ + jenkins
++ **distribution**: The key distribution mode. Possible values are:
+ + ketama
+ + modula
+ + random
 + **timeout**: The timeout value in msec that we wait for to establish a connection to the server or receive a response from a server. By default, we wait indefinitely.
 + **backlog**: The TCP backlog argument. Defaults to 512.
 + **preconnect**: A boolean value that controls if twemproxy should preconnect to all the servers in this pool on process start. Defaults to false.
@@ -143,7 +157,31 @@ Finally, to make writing syntactically correct configuration file easier, twempr
 
 Observability in twemproxy is through logs and stats.
 
-twemproxy exposes stats at the granularity of server pool and servers per pool through the stats monitoring port. The stats are essentially JSON formatted key-value pairs, with the keys corresponding to counter names. By default stats are exposed on port 22222 and aggregated every 30 seconds. Both these values can be configured on program start using the -c or --conf-file and -i or --stats-interval command-line arguments respectively.
+twemproxy exposes stats at the granularity of server pool and servers per pool through the stats monitoring port. The stats are essentially JSON formatted key-value pairs, with the keys corresponding to counter names. By default stats are exposed on port 22222 and aggregated every 30 seconds. Both these values can be configured on program start using the -c or --conf-file and -i or --stats-interval command-line arguments respectively. You can print the description of all stats exported by twemproxy using the -D or --describe-stats command-line argument.
+
+    $ twemproxy --describe-stats
+
+    pool stats:
+      client_eof          "# eof on client connections"
+      client_err          "# errors on client connections"
+      client_connections  "# active client connections"
+      server_ejects       "# times backend server was ejected"
+      forward_error       "# times we encountered a forwarding error"
+      fragments           "# fragments created from a multi-vector request"
+
+    server stats:
+      server_eof          "# eof on server connections"
+      server_err          "# errors on server connections"
+      server_timedout     "# timeouts on server connections"
+      server_connections  "# active server connections"
+      requests            "# requests"
+      request_bytes       "total request bytes"
+      responses           "# respones"
+      response_bytes      "total response bytes"
+      in_queue            "# requests in incoming queue"
+      in_queue_bytes      "current request bytes in incoming queue"
+      out_queue           "# requests in outgoing queue"
+      out_queue_bytes     "current request bytes in outgoing queue"
 
 Logging in twemproxy is only available when twemproxy is built with logging enabled. By default logs are written to stderr. twemproxy can also be configured to write logs to a specific file through the -o or --output command-line argument. On a running twemproxy, we can turn log levels up and down by sending it SIGTTIN and SIGTTOU signals respectively and reopen log files by sending it SIGHUP signal.
 
