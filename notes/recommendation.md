@@ -52,9 +52,9 @@ By default, twemproxy waits indefinitely for any request sent to the server. How
 
 ## Error Response
 
-Whenever a request encounters failure on a server we usually send to the client a response with the general form `SERVER_ERROR <errno description>\r\n`
+Whenever a request encounters failure on a server we usually send to the client a response with the general form - `SERVER_ERROR <errno description>\r\n` (memcached) or `-ERR <errno description>` (redis).
 
-For example, when a server is down, this error response is usually:
+For example, when a memcache server is down, this error response is usually:
 
 + `SERVER_ERROR Connection refused\r\n` or,
 + `SERVER_ERROR Connection reset by peer\r\n`
@@ -63,7 +63,7 @@ When the request timedout, the response is usually:
 
 + `SERVER_ERROR Connection timed out\r\n`
 
-Seeing a `SERVER_ERROR` response should be considered as a transient failure by a client which makes the original request an ideal candidate for a retry.
+Seeing a `SERVER_ERROR` or `-ERR` response should be considered as a transient failure by a client which makes the original request an ideal candidate for a retry.
 
 ## read, writev and mbuf
 
@@ -73,3 +73,46 @@ If twemproxy is meant to handle a large number of concurrent client connections,
 
 ## Maximum Key Length
 The memcache ascii protocol [specification](https://github.com/twitter/twemproxy/blob/master/notes/memcache.txt) limits the maximum length of the key to 250 characters. The key should not include whitespace, or '\r' or '\n' character. For redis, we have no such limitation. However, twemproxy requires the key to be stored in a contiguous memory region. Since all requests and responses in twemproxy are stored in mbuf, the maximum length of the redis key is limited by the size of the maximum available space for data in mbuf (mbuf_data_size()). This means that if you want your redis instances to handle large keys, you might want to choose large mbuf size set using -m or --mbuf-size=N command-line argument.
+
+## Node Names for Consistent Hashing
+
+The server cluster in twemproxy can either be specified as list strings in format 'host:port:weight' or 'host:port:weight name'.
+
+    servers:
+     - 127.0.0.1:6379:1
+     - 127.0.0.1:6380:1
+     - 127.0.0.1:6381:1
+     - 127.0.0.1:6382:1
+
+Or,
+
+    servers:
+     - 127.0.0.1:6379:1 server1
+     - 127.0.0.1:6380:1 server2
+     - 127.0.0.1:6381:1 server3
+     - 127.0.0.1:6382:1 server4
+
+
+In the former configuration, keys are mapped **directly** to **'host:port:weight'** triplet and in the latter they are mapped to **node names** which are then mapped to nodes i.e. host:port pair. The latter configuration gives us the freedom to relocate nodes to a different server without disturbing the hash ring and hence makes this configuration ideal when auto_eject_hosts is set to false. See [issue 25](https://github.com/twitter/twemproxy/issues/25) for details.
+
+Note that when using node names for consistent hashing, twemproxy ignores the weight value in the 'host:port:weight name' format string.
+
+## Hash Tags
+
+[Hash Tags](http://antirez.com/post/redis-presharding.html) enables you to use part of the key for calculating the hash. When the hash tag is present, we use part of the key within the tag as the key to be used for consistent hashing. Otherwise, we use the full key as is. Hash tags enable you to map different keys to the same server as long as the part of the key within the tag is the same.
+
+For example, the configuration of server pool _beta_, aslo shown below, specifies a two character hash_tag string - "{}". This means that keys "user:{user1}:ids" and "user:{user1}:tweets" map to the same server because we compute the hash on "user1". For a key like "user:user1:ids", we use the entire string "user:user1:ids" to compute the hash and it may map to a different server.
+
+    beta:
+      listen: 127.0.0.1:22122
+      hash: fnv1a_64
+      hash_tag: "{}"
+      distribution: ketama
+      auto_eject_hosts: false
+      timeout: 400
+      redis: true
+      servers:
+       - 127.0.0.1:6380:1 server1
+       - 127.0.0.1:6381:1 server2
+       - 127.0.0.1:6382:1 server3
+       - 127.0.0.1:6383:1 server4

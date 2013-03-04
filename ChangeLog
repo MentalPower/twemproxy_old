@@ -1,3 +1,26 @@
+2013-31-01  Manju Rajashekhar  <manj@twitter.com>
+    * twemproxy: version 0.2.3 release
+      RPOPLPUSH, SDIFF, SDIFFSTORE, SINTER, SINTERSTORE, SMOVE, SUNION, SUNIONSTORE, ZINTERSTORE, and ZUNIONSTORE support (dcartoon)
+      EVAL and EVALSHA support (ferenyx)
+      exit 1 if configuration file is invalid (cofyc)
+      return non-zero exit status when twemproxy cannot start for some reason
+      use server names in stats (charsyam)
+      Fix failure to resolve long FQDN name resolve (conmame)
+      add support for hash tags
+
+2012-18-10  Manju Rajashekhar  <manj@twitter.com>
+
+    * twemproxy: version 0.2.2 release
+      fix the off-by-one error when calculating redis key length
+
+2012-12-10  Manju Rajashekhar  <manj@twitter.com>
+
+    * twemproxy: version 0.2.1 release
+      don't use buf in conf_add_server
+      allow an optional instance name for consistent hashing (charsyam)
+      add --stats-addr=S option
+      add stats-bind-any -a option (charsyam)
+
 2012-12-03  Manju Rajashekhar  <manj@twitter.com>
 
     * twemproxy: version 0.2.0 release

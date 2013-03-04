@@ -4,13 +4,13 @@
 
 ## Build
 
-To build twemproxy from distribution tarball:
+To build twemproxy from [distribution tarball](http://code.google.com/p/twemproxy/downloads/list):
 
     $ ./configure
     $ make
     $ sudo make install
 
-To build twemproxy from distribution tarball in _debug mode_:
+To build twemproxy from [distribution tarball](http://code.google.com/p/twemproxy/downloads/list) in _debug mode_:
 
     $ CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full
     $ make
@@ -34,16 +34,18 @@ To build twemproxy from source with _debug logs enabled_ and _assertions disable
 + Enables pipelining of requests and responses.
 + Supports proxying to multiple servers.
 + Supports multiple server pools simultaneously.
++ Shard data automatically across multiple servers.
 + Implements the complete [memcached ascii](https://github.com/twitter/twemproxy/blob/master/notes/memcache.txt) and [redis](https://github.com/twitter/twemproxy/blob/master/notes/redis.md) protocol.
 + Easy configuration of server pools through a YAML file.
 + Supports multiple hashing modes including consistent hashing and distribution.
++ Can be configured to disable nodes on failures.
 + Observability through stats exposed on stats monitoring port.
 
 ## Help
 
     Usage: twemproxy [-?hVdDt] [-v verbosity level] [-o output file]
-                      [-c conf file] [-s stats port] [-i stats interval]
-                      [-p pid file] [-m mbuf size]
+                      [-c conf file] [-s stats port] [-a stats addr]
+                      [-i stats interval] [-p pid file] [-m mbuf size]
 
     Options:
       -h, --help             : this help
@@ -55,6 +57,7 @@ To build twemproxy from source with _debug logs enabled_ and _assertions disable
       -o, --output=S         : set logging file (default: stderr)
       -c, --conf-file=S      : set configuration file (default: conf/twemproxy.yml)
       -s, --stats-port=N     : set stats monitoring port (default: 22222)
+      -a, --stats-addr=S     : set stats monitoring ip (default: 0.0.0.0)
       -i, --stats-interval=N : set stats aggregation interval in msec (default: 30000 msec)
       -p, --pid-file=S       : set pid file (default: off)
       -m, --mbuf-size=N      : set size of mbuf chunk in bytes (default: 16384 bytes)
@@ -81,6 +84,7 @@ twemproxy can be configured through a YAML file specified by the -c or --conf-fi
  + hsieh
  + murmur
  + jenkins
++ **hash_tag**: A two character string that specifies the part of the key used for hashing. Eg "{}" or "$$". [Hash tag](https://github.com/twitter/twemproxy/blob/master/notes/recommendation.md#hash-tags)  enable mapping different keys to the same server as long as the part of the key within the tag is the same.
 + **distribution**: The key distribution mode. Possible values are:
  + ketama
  + modula
@@ -95,7 +99,8 @@ twemproxy can be configured through a YAML file specified by the -c or --conf-fi
 + **server_failure_limit**: The number of conseutive failures on a server that would leads to it being temporarily ejected when auto_eject_host is set to true. Defaults to 2.
 + **servers**: A list of server address, port and weight (name:port:weight or ip:port:weight) for this server pool.
 
-For example, the configuration file in [conf/twemproxy.yml](https://github.com/twitter/twemproxy/blob/master/conf/twemproxy.yml), also shown below, configures 4 server pools with names - _alpha_, _beta_, _gamma_ and _delta_. Clients that intend to send requests to one of the 10 servers in pool gamma connect to port 22123 on 127.0.0.1. Clients that intend to send request to one of 2 servers in pool delta connect to unix path /tmp/gamma. Requests sent to pool alpha and delta have no timeout and might require timeout functionality to be implemented on the client side. On the other hand, requests sent to pool beta and gamma timeout after 400 msec and 100 msec respectively when no response is received from the server. Of the 4 server pools, only pools alpha, beta and gamma are configured to use server ejection and hence are resilient to server failures. All the 4 server pools use ketama consistent hashing for key distribution with the key hasher for pools alpha, beta and gamma set to fnv1a_64 while that for pool delta set to hsieh. Finally, only pool alpha can speak redis protocol, while pool beta, gamma and delta speak memcached protocol.
+
+For example, the configuration file in [conf/twemproxy.yml](https://github.com/twitter/twemproxy/blob/master/conf/twemproxy.yml), also shown below, configures 5 server pools with names - _alpha_, _beta_, _gamma_, _delta_ and omega. Clients that intend to send requests to one of the 10 servers in pool delta connect to port 22124 on 127.0.0.1. Clients that intend to send request to one of 2 servers in pool omega connect to unix path /tmp/gamma. Requests sent to pool alpha and omega have no timeout and might require timeout functionality to be implemented on the client side. On the other hand, requests sent to pool beta, gamma and delta timeout after 400 msec, 400 msec and 100 msec respectively when no response is received from the server. Of the 5 server pools, only pools alpha, gamma and deleta are configured to use server ejection and hence are resilient to server failures. All the 5 server pools use ketama consistent hashing for key distribution with the key hasher for pools alpha, beta, gamma and delta set to fnv1a_64 while that for pool omega set to hsieh. Also only pool beta uses [nodes names](https://github.com/twitter/twemproxy/blob/master/notes/recommendation.md#node-names-for-consistent-hashing) for consistent hashing, while pool alpha, gamma, delta and omega use 'host:port:weight' for consistent hashing. Finally, only pool alpha and beta can speak redis protocol, while pool gamma, deta and omega speak memcached protocol.
 
     alpha:
       listen: 127.0.0.1:22121
@@ -111,6 +116,20 @@ For example, the configuration file in [conf/twemproxy.yml](https://github.com/t
     beta:
       listen: 127.0.0.1:22122
       hash: fnv1a_64
+      hash_tag: "{}"
+      distribution: ketama
+      auto_eject_hosts: false
+      timeout: 400
+      redis: true
+      servers:
+       - 127.0.0.1:6380:1 server1
+       - 127.0.0.1:6381:1 server2
+       - 127.0.0.1:6382:1 server3
+       - 127.0.0.1:6383:1 server4
+
+    gamma:
+      listen: 127.0.0.1:22123
+      hash: fnv1a_64
       distribution: ketama
       timeout: 400
       backlog: 1024
@@ -122,8 +141,8 @@ For example, the configuration file in [conf/twemproxy.yml](https://github.com/t
        - 127.0.0.1:11212:1
        - 127.0.0.1:11213:1
 
-    gamma:
-      listen: 127.0.0.1:22123
+    delta:
+      listen: 127.0.0.1:22124
       hash: fnv1a_64
       distribution: ketama
       timeout: 100
@@ -142,7 +161,7 @@ For example, the configuration file in [conf/twemproxy.yml](https://github.com/t
        - 127.0.0.1:11222:1
        - 127.0.0.1:11223:1
 
-    delta:
+    omega:
       listen: /tmp/gamma
       hash: hsieh
       distribution: ketama
@@ -185,6 +204,15 @@ twemproxy exposes stats at the granularity of server pool and servers per pool t
 
 Logging in twemproxy is only available when twemproxy is built with logging enabled. By default logs are written to stderr. twemproxy can also be configured to write logs to a specific file through the -o or --output command-line argument. On a running twemproxy, we can turn log levels up and down by sending it SIGTTIN and SIGTTOU signals respectively and reopen log files by sending it SIGHUP signal.
 
+## Pipelining
+
+
+twemproxy enables proxying multiple client connections onto one or few server connections. This architectural setup makes it ideal for pipelining requests and responses and hence saving on the round trip time.
+
+For example, if twemproxy is proxing three client connections onto a single server and we get requests - 'get key\r\n', 'set key 0 0 3\r\nval\r\n' and 'delete key\r\n' on these three connections respectively, twemproxy would try to batch these requests and send them as a single message onto the server connection as 'get key\r\nset key 0 0 3\r\nval\r\ndelete key\r\n'.
+
+Pipelining is the reason why twemproxy ends up doing better in terms of throughput even though it introduces an extra hop between the client and server.
+
 ## Deployment
 
 If you are deploying twemproxy in production, you might consider reading through the [recommendation document](https://github.com/twitter/twemproxy/blob/master/notes/recommendation.md) to understand the parameters you could tune in twemproxy to run it efficiently in the production environment.
@@ -193,6 +221,7 @@ If you are deploying twemproxy in production, you might consider reading through
 + [Pinterest](http://pinterest.com/)
 + [Tumblr](https://www.tumblr.com/)
 + [Twitter](https://twitter.com/)
++ [Vine](http://vine.co/)
 
 ## Issues and Support
 
