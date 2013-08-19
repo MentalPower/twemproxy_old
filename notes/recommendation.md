@@ -1,10 +1,10 @@
-If you are deploying twemproxy in your production environment, here are a few recommendations that might be worth considering.
+If you are deploying nutcracker in your production environment, here are a few recommendations that might be worth considering.
 
 ## Log Level
 
-By default debug logging is disabled in twemproxy. However, it is worthwhile running twemproxy with debug logging enabled and verbosity level set to LOG_INFO (-v 6 or --verbosity=6). This in reality does not add much overhead as you only pay the cost of checking an if condition for every log line encountered during the run time.
+By default debug logging is disabled in nutcracker. However, it is worthwhile running nutcracker with debug logging enabled and verbosity level set to LOG_INFO (-v 6 or --verbosity=6). This in reality does not add much overhead as you only pay the cost of checking an if condition for every log line encountered during the run time.
 
-At LOG_INFO level, twemproxy logs the life cycle of every client and server connection and important events like the server being ejected from the hash ring and so on. Eg.
+At LOG_INFO level, nutcracker logs the life cycle of every client and server connection and important events like the server being ejected from the hash ring and so on. Eg.
 
     [Thu Aug  2 00:03:09 2012] nc_proxy.c:336 accepted c 7 on p 6 from '127.0.0.1:54009'
     [Thu Aug  2 00:03:09 2012] nc_server.c:528 connected on s 8 to server '127.0.0.1:11211:1'
@@ -21,7 +21,7 @@ At LOG_INFO level, twemproxy logs the life cycle of every client and server conn
     [Thu Aug  2 00:03:12 2012] nc_request.c:334 c 7 is done
     [Thu Aug  2 00:03:12 2012] nc_core.c:207 close c 7 '127.0.0.1:54011' on event 0001 eof 1 done 1 rb 20 sb 8
 
-To enable debug logging, you have to compile twemproxy with logging enabled using --enable-debug=log configure option.
+To enable debug logging, you have to compile nutcracker with logging enabled using --enable-debug=log configure option.
 
 ## Liveness
 
@@ -34,11 +34,13 @@ Failures are a fact of life, especially when things are distributed. To be resil
 
 Enabling `auto_eject_hosts:` ensures that a dead server can be ejected out of the hash ring after `server_failure_limit:` consecutive failures have been encountered on that said server. A non-zero `server_retry_timeout:` ensures that we don't incorrectly mark a server as dead forever especially when the failures were really transient. The combination of `server_retry_timeout:` and `server_failure_limit:` controls the tradeoff between resiliency to permanent and transient failures.
 
-To ensure that requests always succeed in the face of server ejections (`auto_eject_hosts:` is enabled), some form of retry must be implemented at the client layer since twemproxy itself does not retry a request. This client-side retry count must be greater than `server_failure_limit:` value, which ensures that the original request has a chance to make it to a live server.
+Note that an ejected server will not be included in the hash ring for any requests until the retry timeout passes. This will lead to data partitioning as keys originally on the ejected server will now be written to a server still in the pool.
+
+To ensure that requests always succeed in the face of server ejections (`auto_eject_hosts:` is enabled), some form of retry must be implemented at the client layer since nutcracker itself does not retry a request. This client-side retry count must be greater than `server_failure_limit:` value, which ensures that the original request has a chance to make it to a live server.
 
 ## Timeout
 
-It is always a good idea to configure twemproxy `timeout:` for every server pool, rather than purely relying on client-side timeouts. Eg:
+It is always a good idea to configure nutcracker `timeout:` for every server pool, rather than purely relying on client-side timeouts. Eg:
 
     resilient_pool_with_timeout:
       auto_eject_hosts: true
@@ -48,7 +50,7 @@ It is always a good idea to configure twemproxy `timeout:` for every server pool
 
 Relying only on client-side timeouts has the adverse effect of the original request having timedout on the client to proxy connection, but still pending and outstanding on the proxy to server connection. This further gets exacerbated when client retries the original request.
 
-By default, twemproxy waits indefinitely for any request sent to the server. However, when `timeout:` key is configured, a requests for which no response is received from the server in `timeout:` msec is timedout and an error response `SERVER_ERROR Connection timed out\r\n` is sent back to the client.
+By default, nutcracker waits indefinitely for any request sent to the server. However, when `timeout:` key is configured, a requests for which no response is received from the server in `timeout:` msec is timedout and an error response `SERVER_ERROR Connection timed out\r\n` is sent back to the client.
 
 ## Error Response
 
@@ -67,12 +69,12 @@ Seeing a `SERVER_ERROR` or `-ERR` response should be considered as a transient f
 
 ## read, writev and mbuf
 
-All memory for incoming requests and outgoing responses is allocated in mbuf. Mbuf enables zero copy for requests and responses flowing through the proxy. By default an mbuf is 16K bytes in size and this value can be tuned between 512 and 65K bytes using -m or --mbuf-size=N argument. Every connection has at least one mbuf allocated to it. This means that the number of concurrent connections twemproxy can support is dependent on the mbuf size. A small mbuf allows us to handle more connections, while a large mbuf allows us to read and write more data to and from kernel socket buffers.
+All memory for incoming requests and outgoing responses is allocated in mbuf. Mbuf enables zero copy for requests and responses flowing through the proxy. By default an mbuf is 16K bytes in size and this value can be tuned between 512 and 65K bytes using -m or --mbuf-size=N argument. Every connection has at least one mbuf allocated to it. This means that the number of concurrent connections nutcracker can support is dependent on the mbuf size. A small mbuf allows us to handle more connections, while a large mbuf allows us to read and write more data to and from kernel socket buffers.
 
-If twemproxy is meant to handle a large number of concurrent client connections, you should set the mbuf size to 512 or 1K bytes.
+If nutcracker is meant to handle a large number of concurrent client connections, you should set the mbuf size to 512 or 1K bytes.
 
 ## Maximum Key Length
-The memcache ascii protocol [specification](https://github.com/twitter/twemproxy/blob/master/notes/memcache.txt) limits the maximum length of the key to 250 characters. The key should not include whitespace, or '\r' or '\n' character. For redis, we have no such limitation. However, twemproxy requires the key to be stored in a contiguous memory region. Since all requests and responses in twemproxy are stored in mbuf, the maximum length of the redis key is limited by the size of the maximum available space for data in mbuf (mbuf_data_size()). This means that if you want your redis instances to handle large keys, you might want to choose large mbuf size set using -m or --mbuf-size=N command-line argument.
+The memcache ascii protocol [specification](notes/memcache.txt) limits the maximum length of the key to 250 characters. The key should not include whitespace, or '\r' or '\n' character. For redis, we have no such limitation. However, nutcracker requires the key to be stored in a contiguous memory region. Since all requests and responses in nutcracker are stored in mbuf, the maximum length of the redis key is limited by the size of the maximum available space for data in mbuf (mbuf_data_size()). This means that if you want your redis instances to handle large keys, you might want to choose large mbuf size set using -m or --mbuf-size=N command-line argument.
 
 ## Node Names for Consistent Hashing
 
@@ -116,3 +118,26 @@ For example, the configuration of server pool _beta_, aslo shown below, specifie
        - 127.0.0.1:6381:1 server2
        - 127.0.0.1:6382:1 server3
        - 127.0.0.1:6383:1 server4
+       
+       
+## Graphing Cache-pool State
+
+When running nutcracker in production, you often would like to know the list of live and ejected servers at any given time. You can easily answer this question, by generating a time series graph of live and/or dead servers that are part of any cache pool. To do this your graphing client must collect the following stats exposed by nutcracker:
+
+- **server_eof** which is incremented when server closes the connection normally which should not happen because we use persistent connections.
+- **server_timedout** is incremented when the connection / request to server timedout.
+- **server_err** is incremented for any other kinds of errors.
+
+So, on a given server, the cumulative number of times a server is ejected can be computed as:
+
+```c
+(server_err + server_timedout + server_eof) / server_failure_limit
+```
+
+A diff of the above value between two successive time intervals would generate a nice timeseries graph for ejected servers.
+
+## server_connections: > 1
+
+By design, twemproxy multiplexes several client connections over few server connections. It is important to note that **"read my last write"** constraint doesn't necessarily hold true when twemproxy is configured with `server_connections: > 1`. 
+
+To illustrate this, consider a scenario where twemproxy is configured with `server_connections: 2`. If a client makes pipelined requests with the first request in pipeline being `set foo 0 0 3\r\nbar\r\n` (write) and the second request being `get foo\r\n` (read), the expectation is that the read of key `foo` would return the value `bar`. However, with configuration of two server connections it is possible that write and read request are sent on different server connections which would mean that their completion could race with one another. In summary, if the client expects "read my last write" constraint, you either configure twemproxy to use `server_connections:1` or use clients that only make synchronous requests to twemproxy.

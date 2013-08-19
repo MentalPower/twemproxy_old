@@ -34,6 +34,7 @@ redis_arg0(struct msg *r)
     case MSG_REQ_REDIS_PTTL:
     case MSG_REQ_REDIS_TTL:
     case MSG_REQ_REDIS_TYPE:
+    case MSG_REQ_REDIS_DUMP:
 
     case MSG_REQ_REDIS_DECR:
     case MSG_REQ_REDIS_GET:
@@ -83,7 +84,6 @@ redis_arg1(struct msg *r)
     case MSG_REQ_REDIS_GETSET:
     case MSG_REQ_REDIS_INCRBY:
     case MSG_REQ_REDIS_INCRBYFLOAT:
-    case MSG_REQ_REDIS_SET:
     case MSG_REQ_REDIS_SETNX:
 
     case MSG_REQ_REDIS_HEXISTS:
@@ -138,6 +138,8 @@ redis_arg2(struct msg *r)
     case MSG_REQ_REDIS_ZINCRBY:
     case MSG_REQ_REDIS_ZREMRANGEBYRANK:
     case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
+
+    case MSG_REQ_REDIS_RESTORE:
         return true;
 
     default:
@@ -175,6 +177,7 @@ redis_argn(struct msg *r)
     switch (r->type) {
     case MSG_REQ_REDIS_BITCOUNT:
 
+    case MSG_REQ_REDIS_SET:
     case MSG_REQ_REDIS_HDEL:
     case MSG_REQ_REDIS_HMGET:
     case MSG_REQ_REDIS_HMSET:
@@ -455,6 +458,11 @@ redis_parse_req(struct msg *r)
 
                 if (str4icmp(m, 'd', 'e', 'c', 'r')) {
                     r->type = MSG_REQ_REDIS_DECR;
+                    break;
+                }
+
+                if (str4icmp(m, 'd', 'u', 'm', 'p')) {
+                    r->type = MSG_REQ_REDIS_DUMP;
                     break;
                 }
 
@@ -767,6 +775,11 @@ redis_parse_req(struct msg *r)
                     break;
                 }
 
+                if (str7icmp(m, 'r', 'e', 's', 't', 'o', 'r', 'e')) {
+                    r->type = MSG_REQ_REDIS_RESTORE;
+                    break;
+                }
+
                 break;
 
             case 8:
@@ -947,11 +960,11 @@ redis_parse_req(struct msg *r)
                               "key", r->id, r->type);
                     goto error;
                 }
-                if (r->rlen > mbuf_data_size()) {
+                if (r->rlen >= mbuf_data_size()) {
                     log_error("parsed bad req %"PRIu64" of type %d with key "
-                              "length %d that exceeds maximum redis key "
-                              "length of %d", r->id, r->type, r->rlen,
-                              mbuf_data_size());
+                              "length %d that greater than or equal to maximum"
+                              " redis key length of %d", r->id, r->type,
+                              r->rlen, mbuf_data_size());
                     goto error;
                 }
                 if (r->rnarg == 0) {
@@ -1525,6 +1538,7 @@ redis_parse_rsp(struct msg *r)
     struct mbuf *b;
     uint8_t *p, *m;
     uint8_t ch;
+
     enum {
         SW_START,
         SW_STATUS,
@@ -1662,6 +1676,7 @@ redis_parse_rsp(struct msg *r)
                 r->token = p;
                 r->rlen = 0;
             } else if (ch == '-') {
+                /* handles null bulk reply = '$-1' */
                 state = SW_RUNTO_CRLF;
             } else if (isdigit(ch)) {
                 r->rlen = r->rlen * 10 + (uint32_t)(ch - '0');
@@ -1729,12 +1744,15 @@ redis_parse_rsp(struct msg *r)
                 /* rsp_start <- p */
                 r->narg_start = p;
                 r->rnarg = 0;
+            } else if (ch == '-') {
+                state = SW_RUNTO_CRLF;
             } else if (isdigit(ch)) {
                 r->rnarg = r->rnarg * 10 + (uint32_t)(ch - '0');
             } else if (ch == CR) {
                 if ((p - r->token) <= 1) {
                     goto error;
                 }
+
                 r->narg = r->rnarg;
                 r->narg_end = p;
                 r->token = NULL;
@@ -1763,7 +1781,16 @@ redis_parse_rsp(struct msg *r)
 
         case SW_MULTIBULK_ARGN_LEN:
             if (r->token == NULL) {
-                if (ch != '$') {
+                /*
+                 * From: http://redis.io/topics/protocol, a multi bulk reply
+                 * is used to return an array of other replies. Every element
+                 * of a multi bulk reply can be of any kind, including a
+                 * nested multi bulk reply.
+                 *
+                 * Here, we only handle a multi bulk reply element that
+                 * are either integer reply or bulk reply.
+                 */
+                if (ch != '$' && ch != ':') {
                     goto error;
                 }
                 r->token = p;
@@ -1777,8 +1804,8 @@ redis_parse_rsp(struct msg *r)
                     goto error;
                 }
 
-                if (r->rlen == 1 && (p - r->token) == 3) {
-                    /* handles not-found reply = '$-1'*/
+                if ((r->rlen == 1 && (p - r->token) == 3) || *r->token == ':') {
+                    /* handles not-found reply = '$-1' or integer reply = ':<num>' */
                     r->rlen = 0;
                     state = SW_MULTIBULK_ARGN_LF;
                 } else {

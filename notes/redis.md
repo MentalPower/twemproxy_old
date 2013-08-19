@@ -7,7 +7,7 @@
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
     |        DEL        |    Yes     | DEL key [key …]                                                                                                     |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
-    |       DUMP        |    No      | DUMP key                                                                                                            |
+    |       DUMP        |    Yes     | DUMP key                                                                                                            |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
     |      EXISTS       |    Yes     | EXISTS key                                                                                                          |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
@@ -37,7 +37,7 @@
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
     |     RENAMENX      |    No      | RENAMENX key newkey                                                                                                 |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
-    |      RESTORE      |    No      | RESTORE key ttl serialized-value                                                                                    |
+    |      RESTORE      |    Yes     | RESTORE key ttl serialized-value                                                                                    |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
     |      SORT         |    No      | SORT key [BY pattern] [LIMIT offset count] [GET pattern [GET pattern ...]] [ASC|DESC] [ALPHA] [STORE destination]   |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
@@ -83,7 +83,7 @@
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
     |      PSETEX       |    Yes     | PSETEX key milliseconds value                                                                                       |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
-    |      SET          |    Yes     | SET key value                                                                                                       |
+    |      SET          |    Yes     | SET key value [EX seconds] [PX milliseconds] [NX|XX]                                                                |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
     |      SETBIT       |    Yes     | SETBIT key offset value                                                                                             |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
@@ -168,7 +168,7 @@
     |      RPUSHX       |    Yes     | RPUSHX key value                                                                                                    |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
-* RPOPLPUSH support requires that source and destination keys hash to the same server. You can ensure this by using the same [hashtag](https://github.com/twitter/twemproxy/blob/master/notes/recommendation.md#hash-tags) for source and destination key. Twemproxy does no checking on its end to verify that source and destination key hash to the same server, and the RPOPLPUSH command is forwarded to the server that the source key hashes to
+* RPOPLPUSH support requires that source and destination keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for source and destination key. Twemproxy does no checking on its end to verify that source and destination key hash to the same server, and the RPOPLPUSH command is forwarded to the server that the source key hashes to
 
 ### Sets
 
@@ -204,7 +204,7 @@
     |   SUNIONSTORE     |    Yes*    | SUNIONSTORE destination key [key ...]                                                                               |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
-* SIDFF, SDIFFSTORE, SINTER, SINTERSTORE, SMOVE, SUNION and SUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](https://github.com/twitter/twemproxy/blob/master/notes/recommendation.md#hash-tags) for all keys in the command. Twemproxy does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
+* SIDFF, SDIFFSTORE, SINTER, SINTERSTORE, SMOVE, SUNION and SUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for all keys in the command. Twemproxy does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
 
 
 ### Sorted Sets
@@ -245,7 +245,7 @@
     |    ZUNIONSTORE    |    Yes*    | ZUNIONSTORE destination numkeys key [key ...] [WEIGHTS weight [weight ...]] [AGGREGATE SUM|MIN|MAX]                 |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
-* ZINTERSTORE and ZUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](https://github.com/twitter/twemproxy/blob/master/notes/recommendation.md#hash-tags) for all keys in the command. Twemproxy does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
+* ZINTERSTORE and ZUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for all keys in the command. Twemproxy does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
 
 
 ### Pub/Sub
@@ -298,7 +298,7 @@
     |    SCRIPT LOAD    |    No      | SCRIPT LOAD script                                                                                                  |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
- * EVAL and EVALSHA support is limited to scripts that take at least 1 key. If multiple keys are used, all keys must hash to the same server. You can ensure this by using the same [hashtag](https://github.com/twitter/twemproxy/blob/master/notes/recommendation.md#hash-tags) for all keys. If you use more than 1 key, the proxy does no checking to verify that all keys hash to the same server, and the entire command is forwarded to the server that the first key hashes to
+ * EVAL and EVALSHA support is limited to scripts that take at least 1 key. If multiple keys are used, all keys must hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for all keys. If you use more than 1 key, the proxy does no checking to verify that all keys hash to the same server, and the entire command is forwarded to the server that the first key hashes to
 
 ### Connection
 
@@ -374,11 +374,11 @@
 ### Setup
 
 + redis-server running on machine A.
-+ twemproxy running on machine A as a local proxy to redis-server.
++ nutcracker running on machine A as a local proxy to redis-server.
 + redis-benchmark running on machine B.
 + machine A != machine B.
-+ twemproxy built with --enable-debug=no
-+ twemproxy running with mbuf-size of 512 (-m 512)
++ nutcracker built with --enable-debug=no
++ nutcracker running with mbuf-size of 512 (-m 512)
 + redis-server built from redis 2.6 branch
 
 ### redis-benchmark against redis-server
@@ -397,7 +397,7 @@
     LRANGE_500 (first 450 elements): 11135.86 requests per second
     LRANGE_600 (first 600 elements): 8650.52 requests per second
 
-### redis-benchmark against twemproxy proxing redis-server
+### redis-benchmark against nutcracker proxing redis-server
 
     $ redis-benchmark -h <machine-A> -q -t set,get,incr,lpush,lpop,sadd,spop,lpush,lrange -c 100 -p 22121
     SET: 85470.09 requests per second
